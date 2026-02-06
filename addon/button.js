@@ -1,3 +1,9 @@
+(function() {
+  let script = document.createElement("script");
+  script.src = chrome.runtime.getURL("inject.js");
+  document.body.appendChild(script);
+})();
+
 // sfdcBody: normal Salesforce page
 // ApexCSIPage: Developer Console
 // auraLoadingBox: Lightning / Salesforce1
@@ -9,9 +15,6 @@ if (document.querySelector("body.sfdcBody, body.ApexCSIPage, #auraLoadingBox, #s
   chrome.runtime.sendMessage({message: "getSfHost", url: location.href}, sfHost => {
     if (sfHost) {
       initButton(sfHost, false);
-      let script = document.createElement("script");
-      script.src = chrome.runtime.getURL("inject.js");
-      document.body.appendChild(script);
     }
   });
 }
@@ -154,13 +157,11 @@ function initButton(sfHost, inInspector) {
   }
 
   function colorizeBanner(faviconColor, isSandbox, bannerText){
-    const sandboxBannerSelector = "div.slds-color__background_gray-1.slds-text-align_center.slds-size_full.slds-text-body_regular.oneSystemMessage";
     if (isSandbox === "false"){
-      const bannerContainer = document.querySelector(sandboxBannerSelector);
+      const bannerContainer = document.querySelector("div.slds-color__background_gray-1.slds-text-align_center.slds-size_full.slds-text-body_regular.oneSystemMessage");
       const envNameBanner = document.createElement("div");
       envNameBanner.className = "slds-notify_alert";
       envNameBanner.style.backgroundColor = faviconColor;
-      envNameBanner.style.color = "white";
       const envNameSpan = document.createElement("span");
       envNameSpan.textContent = bannerText ? bannerText : "WARNING: THIS IS PRODUCTION";
       envNameBanner.appendChild(envNameSpan);
@@ -170,17 +171,20 @@ function initButton(sfHost, inInspector) {
         bannerContainer.appendChild(envNameBanner);
       } else {
         //when login as is displayed the banner is not reachable without mutation obersver
-        observeElement(sandboxBannerSelector, (banner) => {
+        const bannerSelector = "div.slds-color__background_gray-1.slds-text-align_center.slds-size_full.slds-text-body_regular.oneSystemMessage";
+        observeElement(bannerSelector, (banner) => {
           banner.appendChild(envNameBanner);
         });
       }
     } else {
-      // add a new observer for the new devops_center sandbox banner
-      observeElement("devops_center-base-component", (banner) => {
-        const navBar = banner.getElementsByClassName("navBar-container")[0];
-        if (navBar) navBar.style.backgroundColor = faviconColor;
-      });
+      //header selector depends on the env type (sandbox or trial)
+      const bannerSelector = isSandbox === "true" ? "div.slds-color__background_gray-1.slds-text-align_center.slds-size_full.slds-text-body_regular.oneSystemMessage > div.slds-notify_alert.system-message.level-info.slds-theme_info" : "div.slds-trial-header.slds-grid.oneTrialHeader.oneTrialExperience";
 
+      observeElement(bannerSelector, (banner) => {
+        banner.style.backgroundColor = faviconColor;
+        //update sandbox name and Logout action color for new UI
+        [...banner.children].forEach(child => child.style.color = "white");
+      });
     }
   }
 

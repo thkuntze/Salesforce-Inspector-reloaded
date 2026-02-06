@@ -1,19 +1,18 @@
 /* eslint-env node */
-// This script makes Release builds of Salesforce Inspector Reloaded.
+// This script makes Release builds of Salesforce Inspector.
 // Dev builds use a different method.
 // This script must be run through "npm run" so the PATH includes NPM dependencies.
 "use strict";
-
 const fs = require("fs-extra");
-const {replaceInFileSync} = require("replace-in-file");
+const replace = require("replace-in-file");
 const zipdir = require("zip-dir");
 
-let browserType = process.argv[2];
+let browser = process.argv[2];
 
-fs.emptyDirSync(`target/${browserType}`);
+fs.emptyDirSync(`target/${browser}`);
 
-let target = `target/${browserType}/dist`;
-if (browserType == "chrome") {
+let target = `target/${browser}/dist`;
+if (browser == "chrome") {
   target += "/addon";
 }
 
@@ -37,30 +36,30 @@ fs.copySync("addon", target, {
 });
 
 // Use minified versions of React. The development versions contain extra checks and validations, which gives better error messages when developing, but are slower.
-replaceInFileSync({
+replace.sync({
   files: target + "/*.html",
-  from: [
+  replace: [
     '<script src="react.js"></script>',
     '<script src="react-dom.js"></script>'
   ],
-  to: [
+  with: [
     '<script src="react.min.js"></script>',
     '<script src="react-dom.min.js"></script>'
   ]
 });
 
 if (process.env.ENVIRONMENT_TYPE == "BETA") {
-  replaceInFileSync({
+  replace.sync({
     files: target + "/manifest.json",
-    from: '"name": "Salesforce Inspector Reloaded",',
-    to: '"name": "Salesforce Inspector Reloaded BETA",'
+    replace: '"name": "Salesforce inspector",',
+    with: '"name": "Salesforce inspector BETA",'
   });
 }
 
-zipdir(`target/${browserType}/dist`, {saveTo: process.env.ZIP_FILE_NAME || `target/${browserType}/${browserType}-release-build.zip`}, err => {
+zipdir(`target/${browser}/dist`, {saveTo: process.env.ZIP_FILE_NAME || `target/${browser}/${browser}-release-build.zip`}, err => {
   if (err) {
     process.exitCode = 1;
     console.error(err);
   }
-  console.log(`Completed ${browserType} release build`);
+  console.log(`Completed ${browser} release build`);
 });

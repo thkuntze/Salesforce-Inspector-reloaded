@@ -1005,6 +1005,10 @@ class App extends React.Component {
   }
 
   setFieldPermissions(field, fieldId, objectName) {
+    const accessToken = sfConn.sessionId;
+    const instanceUrl = `https://${sfConn.instanceHostname}`;
+    const fieldPermissionUrl = `${instanceUrl}/services/data/v${apiVersion}/sobjects/FieldPermissions/`;
+
     if (!field.profiles || !Array.isArray(field.profiles)) {
       return Promise.resolve([]);
     }
@@ -1018,16 +1022,26 @@ class App extends React.Component {
         PermissionsRead: profile.access === "edit" || profile.access === "read"
       };
 
-      return sfConn.rest(`/services/data/v${apiVersion}/sobjects/FieldPermissions/`, {
+      return fetch(fieldPermissionUrl, {
         method: "POST",
-        body: fieldPermissionBody
-      });
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(fieldPermissionBody)
+      })
+        .then(response => response.json());
     });
 
     return Promise.all(permissionPromises);
   }
 
   createField(field, objectName) {
+    const accessToken = sfConn.sessionId;
+    //TODO use sfConn.rest to deploy the fields
+    const instanceUrl = `https://${sfConn.instanceHostname}`;
+    const metadataUrl = `${instanceUrl}/services/data/v${apiVersion}/tooling/sobjects/CustomField`;
+
     const newField = {
       FullName: `${objectName}.${field.name}__c`,
       Metadata: {
@@ -1075,14 +1089,10 @@ class App extends React.Component {
         newField.Metadata.valueSet = {
           valueSetDefinition: {
             sorted: field.sortalpha || false,
-            value: field.picklistvalues
-              .split("\n")
-              .map(value => value.trim())
-              .filter(value => value.length > 0)
-              .map((value, index) => ({
-                fullName: value,
-                default: field.firstvaluedefault && index === 0
-              }))
+            value: field.picklistvalues.split("\n").map((value, index) => ({
+              fullName: value.trim(),
+              default: field.firstvaluedefault && index === 0
+            }))
           }
         };
         if (field.type === "MultiselectPicklist") {
@@ -1108,10 +1118,22 @@ class App extends React.Component {
         console.warn(`Unsupported field type: ${field.type}`);
     }
 
-    return sfConn.rest(`/services/data/v${apiVersion}/tooling/sobjects/CustomField`, {
+    return fetch(metadataUrl, {
       method: "POST",
-      body: newField
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(newField)
     })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(errorData => {
+            throw new Error(JSON.stringify(errorData));
+          });
+        }
+        return response.json();
+      })
       .then(data => this.setFieldPermissions(field, data.id, objectName))
       .catch(error => {
         console.error("Error creating field:", error);
@@ -1240,7 +1262,18 @@ class App extends React.Component {
   };
 
   fetchPermissionSets = () => {
-    sfConn.rest(`/services/data/v${apiVersion}/query/?q=SELECT+Id,Name,Profile.Name+FROM+PermissionSet`)
+    const accessToken = sfConn.sessionId;
+    const instanceUrl = `https://${sfConn.instanceHostname}`;
+    const permissionSetsUrl = `${instanceUrl}/services/data/v${apiVersion}/query/?q=SELECT+Id,Name,Profile.Name+FROM+PermissionSet`;
+
+    fetch(permissionSetsUrl, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      }
+    })
+      .then(response => response.json())
       .then(data => {
         let permissionSets = {};
         let permissionSetMap = {};

@@ -13,10 +13,7 @@ class Model {
     this.allLimitData = [];
     this.errorMessages = [];
     this.sortOptions = [{label: "Consumption", value: "consumption"}, {label: "A-Z %", value: "asc"}];
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const sortFromUrl = urlParams.get("sort");
-    this.sortBy = this.sortOptions.find(opt => opt.value === sortFromUrl) || this.sortOptions[1];
+    this.sortBy = this.sortOptions[1];
 
     let userInfoPromise = sfConn.soap(sfConn.wsdl(apiVersion, "Partner"), "getUserInfo", {});
     this.spinFor("userInfo", userInfoPromise, (res) => {
@@ -61,7 +58,6 @@ class Model {
         "consumption": (res[key].Max - res[key].Remaining) / res[key].Max
       });
     });
-    self.allLimitData = self.sortLimits(self.allLimitData, self.sortBy.value);
   }
 
   humanizeName(name) {
@@ -78,14 +74,6 @@ class Model {
 
   copyAsJson() {
     copyToClipboard(JSON.stringify(this.allLimitData ? this.allLimitData : this.allLimitData, null, "    "), null, "  ");
-  }
-
-  sortLimits(data, sortBy) {
-    const sortFunctions = {
-      consumption: (a, b) => b.consumption - a.consumption,
-      asc: (a, b) => a.label.localeCompare(b.label)
-    };
-    return data.sort(sortFunctions[sortBy] || (() => 0));
   }
 }
 
@@ -115,7 +103,7 @@ class LimitData extends React.Component {
         ),
         h("figcaption", {}, this.props.label,
           h("div", {}, (this.props.max - this.props.remaining).toLocaleString() + " of " + (this.props.max).toLocaleString() + " consumed",
-            h("br", {}), this.props.remaining >= 0 ? "(" + (this.props.remaining).toLocaleString() + " left)" : "(" + (0 - this.props.remaining).toLocaleString() + " overconsumed)"
+            h("br", {}), "(" + (this.props.remaining).toLocaleString() + " left)"
           ),
         )
       )
@@ -126,7 +114,7 @@ class LimitData extends React.Component {
   }
   componentDidMount() {
     // Animate gauge to relevant value
-    let targetDegree = (this.props.max == 0 || this.props.remaining < 0) ? "180deg" : ((1 - this.divide(this.props.remaining, this.props.max)) * 180) + "deg"; //180deg = 100%, 0deg = 0%
+    let targetDegree = (this.props.max == 0) ? "180deg" : ((1 - this.divide(this.props.remaining, this.props.max)) * 180) + "deg"; //180deg = 100%, 0deg = 0%
     this.refs.meter.animate([{
       transform: "rotate(0deg)"
     }, {
@@ -145,7 +133,14 @@ class App extends React.Component {
     this.model = this.props.vm;
     this.onCopyAsJson = this.onCopyAsJson.bind(this);
     this.onSortBy = this.onSortBy.bind(this);
-    this.onRefreshLimits = this.onRefreshLimits.bind(this);
+  }
+
+  sortLimits(data, sortBy) {
+    const sortFunctions = {
+      consumption: (a, b) => b.consumption - a.consumption,
+      asc: (a, b) => a.label.localeCompare(b.label)
+    };
+    return data.sort(sortFunctions[sortBy] || (() => 0));
   }
 
   onCopyAsJson() {
@@ -154,15 +149,8 @@ class App extends React.Component {
   }
   onSortBy(e){
     this.model.sortBy = e.target.value;
-    const url = new URL(window.location);
-    url.searchParams.set("sort", this.model.sortBy);
-    window.history.pushState({}, "", url);
-    this.model.allLimitData = this.model.sortLimits(this.model.allLimitData, this.model.sortBy);
+    this.model.allLimitData = this.sortLimits(this.model.allLimitData, this.model.sortBy);
     this.model.didUpdate();
-  }
-
-  onRefreshLimits(){
-    this.model.startLoading();
   }
 
   render() {
@@ -179,15 +167,8 @@ class App extends React.Component {
         h("h1", {}, model.title),
         h("span", {}, " / " + model.userInfo),
         h("div", {className: "flex-right"},
-          h("a", {href: "#", id: "refresh", title: "Refresh Limits", onClick: this.onRefreshLimits},
-            h("svg", {className: "icon"},
-              h("use", {xlinkHref: "symbols.svg#refresh"})
-            )
-          ),
-          h("a", {href: "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_limits.htm", target: "_blank", title: "Org Limits Help", onClick: null},
-            h("svg", {className: "icon"},
-              h("use", {xlinkHref: "symbols.svg#help"})
-            )
+          h("a", {href: "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_limits.htm", target: "_blank", id: "help-btn", title: "Org Limits Help", onClick: null},
+            h("div", {className: "icon"})
           ),
           h("div", {id: "spinner", role: "status", className: "slds-spinner slds-spinner_small slds-spinner_inline", hidden: model.spinnerCount == 0},
             h("span", {className: "slds-assistive-text"}),
@@ -203,7 +184,7 @@ class App extends React.Component {
             h("button", {disabled: model.allLimitData.length == 0, onClick: this.onCopyAsJson, title: "Copy raw JSON to clipboard"}, "Copy")
           ),
           h("div", {className: "flex-right"},
-            h("select", {value: model.sortBy.value, onChange: this.onSortBy, className: ""},
+            h("select", {value: model.sortBy, onChange: this.onSortBy, className: ""},
               h("option", {value: "none", disabled: true, defaultValue: true, hidden: true}, "Sort By"),
               model.sortOptions.map(opt => h("option", {key: opt.value, value: opt.value}, opt.label))
             ),
